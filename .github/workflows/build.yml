@@ -1,0 +1,305 @@
+# Git Ship — 测试 + PyInstaller 打包（Windows / macOS）
+#
+# 触发：
+#   - push 到 main/master
+#   - 打 tag：v*（自动创建 Release 并上传产物）
+#   - PR（仅测试，不打包）
+#   - 手动 workflow_dispatch
+#
+# 产物：
+#   - git-ship-gui-<os>-<arch>  （GUI）
+#   - git-ship-cli-<os>-<arch>  （CLI）
+#   - 附带 README / 压缩包
+
+name: Build
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------- 单元测试 ----------
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Git (sanity)
+        run: git --version
+
+      - name: Run unit tests
+        shell: bash
+        run: |
+          python -m unittest discover -s tests -v
+
+  # ---------- 打包 ----------
+  build:
+    name: Package (${{ matrix.os }})
+    needs: test
+    # PR 只跑测试，不打包；push / tag / 手动触发才打包
+    if: github.event_name != 'pull_request'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            arch: x64
+            ext: .exe
+            gui_name: git-ship
+            cli_name: git-ship-cli
+          - os: macos-latest
+            platform: macos
+            arch: arm64
+            ext: ""
+            gui_name: git-ship
+            cli_name: git-ship-cli
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pyinstaller>=6.0"
+
+      - name: Detect version
+        id: ver
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION="0.0.0+${GITHUB_SHA::7}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building version: ${VERSION}"
+
+      - name: Build GUI (onefile)
+        shell: bash
+        run: |
+          python -m PyInstaller \
+            --noconfirm \
+            --clean \
+            --onefile \
+            --windowed \
+            --name "${{ matrix.gui_name }}" \
+            --paths . \
+            --hidden-import=core \
+            --hidden-import=core.git_ops \
+            --hidden-import=core.remote \
+            --hidden-import=core.workflow \
+            --hidden-import=core.config \
+            --hidden-import=core.sensitive \
+            --hidden-import=ui \
+            --hidden-import=ui.main_window \
+            --hidden-import=ui.widgets \
+            --hidden-import=cli \
+            --hidden-import=cli.app \
+            git_ship.py
+
+      - name: Build CLI (onefile)
+        shell: bash
+        run: |
+          python -m PyInstaller \
+            --noconfirm \
+            --clean \
+            --onefile \
+            --console \
+            --name "${{ matrix.cli_name }}" \
+            --paths . \
+            --hidden-import=core \
+            --hidden-import=core.git_ops \
+            --hidden-import=core.remote \
+            --hidden-import=core.workflow \
+            --hidden-import=core.config \
+            --hidden-import=core.sensitive \
+            --hidden-import=cli \
+            --hidden-import=cli.app \
+            git_ship_cli.py
+
+      - name: Stage artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="dist/release"
+          mkdir -p "${OUT}"
+          GUI_SRC="dist/${{ matrix.gui_name }}${{ matrix.ext }}"
+          CLI_SRC="dist/${{ matrix.cli_name }}${{ matrix.ext }}"
+          GUI_DST="git-ship-gui-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}"
+          CLI_DST="git-ship-cli-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}"
+          ZIP_BASE="git-ship-${{ steps.ver.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}"
+
+          if [[ ! -f "${GUI_SRC}" ]]; then
+            echo "GUI binary missing: ${GUI_SRC}"
+            ls -la dist || true
+            exit 1
+          fi
+          if [[ ! -f "${CLI_SRC}" ]]; then
+            echo "CLI binary missing: ${CLI_SRC}"
+            ls -la dist || true
+            exit 1
+          fi
+
+          cp "${GUI_SRC}" "${OUT}/${GUI_DST}"
+          cp "${CLI_SRC}" "${OUT}/${CLI_DST}"
+          cp README.md "${OUT}/README.md" 2>/dev/null || true
+
+          {
+            echo "Git Ship ${{ steps.ver.outputs.version }}"
+            echo "Platform: ${{ matrix.platform }}-${{ matrix.arch }}"
+            echo ""
+            echo "GUI: 双击 ${GUI_DST}"
+            echo "CLI: ./${CLI_DST} --help"
+            echo "     ./${CLI_DST} status --path ."
+            echo "     ./${CLI_DST} ship -m \"message\" --path ."
+            echo ""
+            echo "依赖：系统已安装 Git，且 git 在 PATH 中。"
+            echo "不保存账号密码，推送使用系统 Git 凭据。"
+          } > "${OUT}/USAGE.txt"
+
+          python - << PY
+          import shutil
+          from pathlib import Path
+          out = Path("dist/release")
+          archive = Path("dist") / "${ZIP_BASE}"
+          shutil.make_archive(str(archive), "zip", root_dir=out)
+          print("created", archive.with_suffix(".zip"))
+          PY
+          ls -la dist
+          ls -la "${OUT}"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: git-ship-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            dist/git-ship-*.zip
+            dist/release/*
+          if-no-files-found: error
+          retention-days: 30
+
+  # ---------- 打 tag 时创建 GitHub Release ----------
+  release:
+    name: Publish Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Extract release notes from CHANGELOG.md
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          # v0.2.0 / v0.2.0-rc.1 → 0.2.0 / 0.2.0-rc.1
+          VERSION="${TAG#v}"
+          OUT="release_notes.md"
+
+          if [[ ! -f CHANGELOG.md ]]; then
+            echo "CHANGELOG.md not found" >&2
+            exit 1
+          fi
+
+          # 提取 ## [VERSION] ... 到下一个 ## [ 之前（Keep a Changelog）
+          python - <<'PY' "${VERSION}" "${OUT}"
+          import re
+          import sys
+          from pathlib import Path
+
+          version, out_path = sys.argv[1], sys.argv[2]
+          text = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          # 匹配 ## [0.2.0] 或 ## [0.2.0] - 2026-07-22
+          pattern = re.compile(
+              rf"^## \[{re.escape(version)}\][^\n]*\n(.*?)(?=^## \[|\Z)",
+              re.MULTILINE | re.DOTALL,
+          )
+          m = pattern.search(text)
+          if not m:
+              raise SystemExit(
+                  f"CHANGELOG.md 中未找到版本段落: ## [{version}]"
+              )
+          body = m.group(1).strip()
+          # 去掉文末比较链接表（--- 之后）
+          if "\n---\n" in body:
+              body = body.split("\n---\n", 1)[0].strip()
+          header = f"## {version}\n\n"
+          Path(out_path).write_text(header + body + "\n", encoding="utf-8")
+          print(f"Extracted {len(body)} chars for version {version}")
+          print("---")
+          print(header + body)
+          PY
+
+          echo "path=${OUT}" >> "$GITHUB_OUTPUT"
+
+      - name: Flatten release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          # 收集各平台 zip 与可执行文件
+          find artifacts -type f \( -name '*.zip' -o -name 'git-ship-*' -o -name 'USAGE.txt' -o -name 'README.md' \) -print
+          find artifacts -type f -name '*.zip' -exec cp {} release/ \;
+          # 若没有 zip，则把整个 artifact 目录打成包
+          if [[ -z "$(ls -A release 2>/dev/null || true)" ]]; then
+            echo "No zip found, packaging raw artifacts"
+            cd artifacts
+            for d in */; do
+              name="${d%/}"
+              zip -r "../release/${name}.zip" "${name}"
+            done
+            cd ..
+          fi
+          ls -la release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Git Ship ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body_path: release_notes.md
+          generate_release_notes: false
+          files: release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,6 @@
+# Git Ship — 无第三方 Python 依赖
+# 仅需：
+#   - Python 3.10+
+#   - 系统已安装 Git，且 `git` 在 PATH 中
+#
+# GUI 使用标准库 tkinter（Windows / macOS 官方 Python 通常自带）
