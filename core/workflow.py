@@ -133,7 +133,10 @@ def plan_bootstrap(
 
     remote = (remote_url or "").strip()
     if remote and not validate_remote_url(remote):
-        return _fail(f"远程 URL 无效: {remote}", steps)
+        return _fail(
+            f"远程 URL 无效: {remote}（支持 https://、git@host:path、ssh://）",
+            steps,
+        )
 
     initial_branch = (branch or "main").strip() or "main"
     steps.append(f"[计划] 目标目录: {target}")
@@ -216,7 +219,10 @@ def bootstrap(
 
     remote = (remote_url or "").strip()
     if remote and not validate_remote_url(remote):
-        return _fail(f"远程 URL 无效: {remote}", steps)
+        return _fail(
+            f"远程 URL 无效: {remote}（支持 https://、git@host:path、ssh://）",
+            steps,
+        )
 
     initial_branch = (branch or "main").strip() or "main"
 
@@ -301,10 +307,11 @@ def bootstrap(
             branch=current or None,
         )
         if not push_result.ok:
+            enriched = git_ops.enrich_remote_error(push_result)
             return _fail(
                 f"推送失败: {push_result.message}",
                 steps,
-                detail=push_result.stderr or push_result.stdout,
+                detail=enriched,
             )
         steps.append(f"已推送并设置 upstream（origin/{current or initial_branch}）")
         return _ok("bootstrap 完成：已初始化并推送", steps, detail=push_result.stdout)
@@ -455,10 +462,11 @@ def ship(
         branch=current or None if need_upstream else None,
     )
     if not push_result.ok:
+        enriched = git_ops.enrich_remote_error(push_result)
         return _fail(
             f"推送失败: {push_result.message}",
             steps,
-            detail=push_result.stderr or push_result.stdout,
+            detail=enriched,
         )
     if need_upstream:
         steps.append(f"已推送并设置 upstream（origin/{current or 'HEAD'}）")
@@ -574,10 +582,11 @@ def pull_workflow(
 
     result = git_ops.pull(target, remote=remote_name, branch=branch_name, rebase=rebase)
     if not result.ok:
+        enriched = git_ops.enrich_remote_error(result)
         return _fail(
             f"拉取失败: {result.message}",
             steps,
-            detail=result.stderr or result.stdout,
+            detail=enriched,
         )
     steps.append(f"已执行 git pull{mode} {remote_name}" + (f" {branch_name}" if branch_name else ""))
     return _ok("pull 完成", steps, detail=result.stdout or result.stderr)

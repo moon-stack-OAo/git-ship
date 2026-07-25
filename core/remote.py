@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""远程平台 HTTPS 模板与 URL 校验。"""
+"""远程平台 HTTPS/SSH 模板与 URL 校验。"""
 
 from __future__ import annotations
 
@@ -27,6 +27,16 @@ _HTTPS_GIT_RE = re.compile(
     r"^https://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$",
     re.IGNORECASE,
 )
+# git@host:owner/repo 或 git@host:owner/repo.git（.git 可选）
+_SSH_SCP_RE = re.compile(
+    r"^git@[^:\s]+:[^\s]+(?:\.git)?$",
+    re.IGNORECASE,
+)
+# ssh://[user@]host[:port]/path
+_SSH_URI_RE = re.compile(
+    r"^ssh://(?:[^@\s/]+@)?[^/\s]+(?::\d+)?/[^\s]+$",
+    re.IGNORECASE,
+)
 
 
 def build_https_url(provider: str, owner: str, repo: str) -> str:
@@ -46,14 +56,26 @@ def build_https_url(provider: str, owner: str, repo: str) -> str:
 
 
 def validate_remote_url(url: str) -> bool:
-    """校验远程 URL（P0 以 HTTPS 为主，也接受常见 git@ SSH 形式便于识别）。"""
+    """校验远程 URL：HTTPS 为主，兼容 git@ 与 ssh:// 形式。"""
     text = (url or "").strip()
     if not text or any(ch.isspace() for ch in text):
         return False
 
-    # SSH: git@host:owner/repo.git
+    # SCP 风格 SSH: git@host:owner/repo[.git]
     if text.startswith("git@"):
-        return bool(re.match(r"^git@[^:\s]+:[^\s]+\.git$", text))
+        return bool(_SSH_SCP_RE.match(text))
+
+    # URI 风格 SSH: ssh://git@host[:port]/owner/repo[.git]
+    if text.lower().startswith("ssh://"):
+        if not _SSH_URI_RE.match(text):
+            return False
+        parsed = urlparse(text)
+        if parsed.scheme.lower() != "ssh":
+            return False
+        if not parsed.hostname:
+            return False
+        parts = [p for p in (parsed.path or "").split("/") if p]
+        return len(parts) >= 1
 
     if not text.lower().startswith("https://"):
         return False
@@ -65,7 +87,6 @@ def validate_remote_url(url: str) -> bool:
         return False
     if not parsed.netloc or not parsed.path or parsed.path == "/":
         return False
-    # 路径至少要有一段
     parts = [p for p in parsed.path.split("/") if p]
     if len(parts) < 1:
         return False
@@ -87,7 +108,7 @@ def detect_provider(url: str) -> str:
             return "custom"
     else:
         parsed = urlparse(text if "://" in text else f"https://{text}")
-        host = (parsed.netloc or "").lower()
+        host = (parsed.hostname or parsed.netloc or "").lower()
         if "@" in host:
             host = host.rsplit("@", 1)[-1]
         if ":" in host and not host.startswith("["):

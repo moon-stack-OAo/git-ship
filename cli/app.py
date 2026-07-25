@@ -104,7 +104,12 @@ def cmd_remote_set(args: argparse.Namespace) -> int:
         _print_err("请通过 --url 指定远程地址")
         return 1
     if not validate_remote_url(url):
-        _print_err(f"远程 URL 无效: {url}")
+        _print_err(
+            f"远程 URL 无效: {url}\n"
+            "支持：https://host/owner/repo.git、"
+            "git@host:owner/repo[.git]、"
+            "ssh://git@host/owner/repo[.git]"
+        )
         return 1
     if not git_ops.is_repo(path):
         _print_err(f"不是 Git 仓库: {path}")
@@ -286,12 +291,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_remote = sub.add_parser("remote", help="远程相关")
     remote_sub = p_remote.add_subparsers(dest="remote_command", required=True)
     p_remote_set = remote_sub.add_parser("set", help="设置 origin URL")
-    p_remote_set.add_argument("--url", required=True, help="远程 HTTPS URL")
+    p_remote_set.add_argument(
+        "--url",
+        required=True,
+        help="远程 URL（HTTPS 或 SSH，如 git@host:owner/repo.git）",
+    )
     p_remote_set.add_argument("--path", default=".", help="仓库路径，默认当前目录")
     p_remote_set.set_defaults(func=cmd_remote_set)
 
     p_boot = sub.add_parser("bootstrap", help="初始化 + 提交 + 推送")
-    p_boot.add_argument("--remote", required=True, help="远程 HTTPS URL")
+    p_boot.add_argument(
+        "--remote",
+        required=True,
+        help="远程 URL（HTTPS 或 SSH）",
+    )
     p_boot.add_argument("-m", "--message", required=True, help="提交说明")
     p_boot.add_argument("--path", default=".", help="仓库路径，默认当前目录")
     p_boot.add_argument("--branch", default="main", help="初始分支，默认 main")

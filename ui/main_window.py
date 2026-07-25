@@ -139,7 +139,7 @@ class MainWindow:
         )
         self.busy_label.grid(row=2, column=0, columnspan=4, sticky="w", pady=(4, 0))
 
-        remote_frame = ttk.LabelFrame(left, text="远程（HTTPS）", padding=8)
+        remote_frame = ttk.LabelFrame(left, text="远程（HTTPS / SSH）", padding=8)
         remote_frame.grid(row=1, column=0, sticky="ew", pady=(0, 8))
         remote_frame.columnconfigure(1, weight=1)
 
@@ -479,7 +479,11 @@ class MainWindow:
     def fill_url_from_template(self) -> None:
         key = self._provider_key()
         if key == "custom":
-            messagebox.showinfo("提示", "自定义平台请直接填写完整 HTTPS URL")
+            messagebox.showinfo(
+                "提示",
+                "自定义平台请直接填写完整远程 URL\n"
+                "（HTTPS 或 SSH，如 git@host:owner/repo.git）",
+            )
             return
         owner = self.owner_var.get().strip()
         repo = self.repo_name_var.get().strip()
@@ -757,7 +761,10 @@ class MainWindow:
         path = self._repo_path()
         url = self.remote_var.get().strip()
         if not validate_remote_url(url):
-            msg = f"远程 URL 无效: {url}"
+            msg = (
+                f"远程 URL 无效: {url}\n"
+                "支持 https://、git@host:owner/repo[.git]、ssh://git@host/..."
+            )
             self.log_err(msg)
             messagebox.showerror("错误", msg)
             return
@@ -838,7 +845,11 @@ class MainWindow:
             messagebox.showwarning("提示", "请填写远程 URL")
             return
         if not validate_remote_url(url):
-            messagebox.showerror("错误", f"远程 URL 无效: {url}")
+            messagebox.showerror(
+                "错误",
+                f"远程 URL 无效: {url}\n"
+                "支持 https://、git@host:owner/repo[.git]、ssh://git@host/...",
+            )
             return
         if not messagebox.askyesno(
             "确认 Bootstrap",
@@ -893,7 +904,11 @@ class MainWindow:
             messagebox.showwarning("提示", "请填写远程 URL")
             return
         if not validate_remote_url(url):
-            messagebox.showerror("错误", f"远程 URL 无效: {url}")
+            messagebox.showerror(
+                "错误",
+                f"远程 URL 无效: {url}\n"
+                "支持 https://、git@host:owner/repo[.git]、ssh://git@host/...",
+            )
             return
 
         def worker():
@@ -1028,7 +1043,9 @@ class MainWindow:
             "一、准备工作\n"
             "  1. 系统已安装 Git，终端可执行 git --version\n"
             "  2. 推送使用系统 Git 凭据（本工具不保存账号密码）\n"
-            "  3. 默认 HTTPS；支持 GitHub / GitLab / Gitee 模板\n\n"
+            "  3. 默认 HTTPS 模板；也可粘贴 SSH（git@... / ssh://...）\n"
+            "  4. 首次推送前请在系统侧配置 PAT 或 SSH Key\n"
+            "     （工具禁用交互式密码输入，需预先配好凭据）\n\n"
             "二、日常提交流程（已有仓库）\n"
             "  1. 浏览选择仓库路径 → 刷新\n"
             "  2. 左侧查看变更文件，可选中部分文件\n"

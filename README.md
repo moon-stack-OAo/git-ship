@@ -141,14 +141,15 @@ git-ship/
 
 ## 注意事项
 
-1. **凭据**：不保存账号密码；HTTPS 推送依赖系统 Git Credential Manager / 凭据助手。
-2. **协议**：默认与模板均为 HTTPS；SSH URL 可识别与校验，但模板生成只出 HTTPS。
-3. **不支持 force push**：无强制推送能力，避免误覆盖远程历史。`--force` 仅用于忽略敏感文件提醒。
-4. **提交规范**：不强制 Conventional Commits，message 仅需非空。
-5. **远程平台**：GitHub / GitLab / Gitee 为常用模板；其他主机选「自定义」并填写完整 URL。
-6. **Dry-run**：不执行 `init/add/commit/push/pull/checkout` 写操作，仅输出计划步骤与当前 diff 摘要。
-7. **敏感文件**：默认拦截疑似密钥/环境变量文件；CLI 用 `--force`，GUI 弹窗确认后继续。
-8. **GUI 异步**：耗时 Git 操作在后台线程执行，期间按钮禁用；请勿强制关闭窗口中途杀进程。
+1. **凭据**：不保存账号密码；HTTPS 推送依赖系统 Git Credential Manager / 凭据助手；SSH 依赖本机密钥与 agent。工具设置 `GIT_TERMINAL_PROMPT=0`，**不会**交互式询问密码；认证失败时会给出配置提示。
+2. **协议**：默认与模板均为 HTTPS；支持粘贴 `git@host:owner/repo[.git]` 与 `ssh://git@host/owner/repo[.git]`。
+3. **超时**：本地 git 默认 60s，`push`/`pull` 默认 300s；可用环境变量 `GIT_SHIP_TIMEOUT` / `GIT_SHIP_REMOTE_TIMEOUT` 调整（秒，≤0 表示不限制）。
+4. **不支持 force push**：无强制推送能力，避免误覆盖远程历史。`--force` 仅用于忽略敏感文件提醒。
+5. **提交规范**：不强制 Conventional Commits，message 仅需非空。
+6. **远程平台**：GitHub / GitLab / Gitee 为常用模板；其他主机选「自定义」并填写完整 URL。
+7. **Dry-run**：不执行 `init/add/commit/push/pull/checkout` 写操作，仅输出计划步骤与当前 diff 摘要。
+8. **敏感文件**：默认拦截疑似密钥/环境变量文件；CLI 用 `--force`，GUI 弹窗确认后继续。
+9. **GUI 异步**：耗时 Git 操作在后台线程执行，期间按钮禁用；请勿强制关闭窗口中途杀进程。
 
 ## 变更记录
 

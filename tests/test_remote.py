@@ -53,6 +53,10 @@ class TestValidateRemoteUrl(unittest.TestCase):
 
     def test_valid_ssh(self):
         self.assertTrue(validate_remote_url("git@github.com:acme/demo.git"))
+        self.assertTrue(validate_remote_url("git@github.com:acme/demo"))  # 无 .git
+        self.assertTrue(validate_remote_url("ssh://git@github.com/acme/demo.git"))
+        self.assertTrue(validate_remote_url("ssh://git@github.com/acme/demo"))
+        self.assertTrue(validate_remote_url("ssh://git@gitlab.com:2222/group/proj.git"))
 
     def test_invalid(self):
         self.assertFalse(validate_remote_url(""))
@@ -61,12 +65,16 @@ class TestValidateRemoteUrl(unittest.TestCase):
         self.assertFalse(validate_remote_url("https://"))
         self.assertFalse(validate_remote_url("https://github.com"))
         self.assertFalse(validate_remote_url("https://github.com/a b/c.git"))
+        self.assertFalse(validate_remote_url("ssh://"))
+        self.assertFalse(validate_remote_url("ssh://github.com"))
+        self.assertFalse(validate_remote_url("git@github.com"))
 
 
 class TestDetectProvider(unittest.TestCase):
     def test_github(self):
         self.assertEqual(detect_provider("https://github.com/a/b.git"), "github")
         self.assertEqual(detect_provider("git@github.com:a/b.git"), "github")
+        self.assertEqual(detect_provider("ssh://git@github.com/a/b.git"), "github")
 
     def test_gitlab(self):
         self.assertEqual(detect_provider("https://gitlab.com/a/b.git"), "gitlab")
@@ -89,6 +97,14 @@ class TestParseOwnerRepo(unittest.TestCase):
     def test_ssh(self):
         self.assertEqual(
             parse_owner_repo("git@github.com:acme/demo.git"),
+            ("acme", "demo"),
+        )
+        self.assertEqual(
+            parse_owner_repo("ssh://git@github.com/acme/demo.git"),
+            ("acme", "demo"),
+        )
+        self.assertEqual(
+            parse_owner_repo("git@github.com:acme/demo"),
             ("acme", "demo"),
         )
 
