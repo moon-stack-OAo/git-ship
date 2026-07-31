@@ -327,10 +327,17 @@ class MainWindow:
             for col in range(3):
                 btn_wrap.columnconfigure(col, weight=1, uniform="actbtn")
             for col, (text, cmd, track) in enumerate(buttons):
+                if not (text or "").strip():
+                    continue
                 btn = ttk.Button(btn_wrap, text=text, command=cmd)
                 if track:
                     self._track_button(btn)
-                btn.grid(row=0, column=col, sticky="ew", padx=(0, 6) if col < 2 else 0)
+                btn.grid(
+                    row=0,
+                    column=col,
+                    sticky="ew",
+                    padx=(0, 6) if col < len(buttons) - 1 else 0,
+                )
 
         # 日常提交
         _action_row(
@@ -354,14 +361,22 @@ class MainWindow:
                 ("Bootstrap", self.do_bootstrap, True),
             ],
         )
-        # 预览与辅助（使用说明不参与 busy 禁用）
+        # 预览与辅助（使用说明 / 配置凭据不参与 busy 禁用）
         _action_row(
             action_frame,
             2,
             "其他",
             [
                 ("试运行 Bootstrap", self.do_bootstrap_dry_run, True),
+                ("配置凭据", self.show_auth_help, False),
                 ("使用说明", self.show_help, False),
+            ],
+        )
+        _action_row(
+            action_frame,
+            3,
+            "日志",
+            [
                 ("清空日志", self.clear_log, True),
             ],
         )
@@ -1006,6 +1021,84 @@ class MainWindow:
     def clear_log(self) -> None:
         self.log.clear()
 
+    def show_auth_help(self) -> None:
+        """弹出凭据配置说明，可触发只读诊断。"""
+        from core.auth_guide import (
+            diagnose_auth,
+            format_auth_help,
+            format_diagnosis,
+        )
+
+        remote_url = self.remote_var.get().strip()
+        if not remote_url:
+            path = self._repo_path()
+            if path.exists() and git_ops.is_repo(path):
+                remote = git_ops.remote_get(path)
+                if remote.ok and remote.stdout:
+                    remote_url = remote.stdout
+
+        win = tk.Toplevel(self.master)
+        win.title("Git Ship — 配置凭据")
+        win.geometry("680x560")
+        win.minsize(480, 360)
+        win.transient(self.master)
+        try:
+            win.grab_set()
+        except tk.TclError:
+            pass
+
+        frame = ttk.Frame(win, padding=12)
+        frame.pack(fill="both", expand=True)
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(0, weight=1)
+
+        text = tk.Text(
+            frame,
+            wrap="word",
+            font=("Microsoft YaHei UI", 10),
+            relief="solid",
+            borderwidth=1,
+            padx=8,
+            pady=8,
+        )
+        scroll = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=scroll.set)
+        text.grid(row=0, column=0, sticky="nsew")
+        scroll.grid(row=0, column=1, sticky="ns")
+
+        help_body = format_auth_help(protocol="auto", remote_url=remote_url)
+        text.insert("1.0", help_body)
+
+        btn_row = ttk.Frame(frame)
+        btn_row.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+
+        def _run_diagnosis() -> None:
+            def worker():
+                return diagnose_auth(remote_url=remote_url, run_ssh_test=True)
+
+            def done(diag):
+                body = format_diagnosis(diag) + "\n\n" + help_body
+                try:
+                    if text.winfo_exists():
+                        text.configure(state="normal")
+                        text.delete("1.0", "end")
+                        text.insert("1.0", body)
+                        text.see("1.0")
+                except tk.TclError:
+                    pass
+                self.log_info("已完成凭据环境诊断（只读）")
+
+            # 诊断可能触发 ssh -T，放到后台避免卡住 GUI
+            self._run_async("凭据诊断", worker, done)
+
+        ttk.Button(btn_row, text="运行诊断", command=_run_diagnosis, width=12).pack(
+            side="left"
+        )
+        ttk.Button(btn_row, text="关闭", command=win.destroy, width=10).pack(
+            side="right"
+        )
+        win.focus_set()
+
     def show_help(self, mark_seen: bool = False) -> None:
         """弹出使用说明窗口。"""
         win = tk.Toplevel(self.master)
@@ -1071,7 +1164,8 @@ class MainWindow:
             "  · 不支持 force push，避免误覆盖远程历史\n"
             "  · 耗时操作在后台执行，期间按钮会暂时禁用\n"
             "  · 配置保存在 ~/.git-ship/config.json\n"
-            "  · CLI 用法见项目 README（git_ship_cli.py）\n\n"
+            "  · CLI 用法见项目 README（git_ship_cli.py）\n"
+            "  · 凭据诊断：操作区「配置凭据」或 CLI doctor\n\n"
             "快捷建议：先试运行 → 再正式提交/推送。\n"
         )
         text.insert("1.0", help_body)

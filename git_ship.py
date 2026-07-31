@@ -14,6 +14,7 @@ from ui.main_window import run_app
 
 
 def main() -> None:
+    """setuptools entry point：git-ship（GUI）。"""
     run_app()
 
 

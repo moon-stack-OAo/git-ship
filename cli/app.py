@@ -9,11 +9,13 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from core import git_ops
+from core.__version__ import __version__
 from core.remote import validate_remote_url
-from core.sensitive import find_sensitive_files, format_sensitive_warning
+from core.sensitive import format_sensitive_warning
 from core.workflow import (
     bootstrap,
     checkout_workflow,
+    collect_sensitive_files,
     list_branches_workflow,
     pull_workflow,
     ship,
@@ -243,8 +245,8 @@ def cmd_check_sensitive(args: argparse.Namespace) -> int:
     if not path.exists() or not git_ops.is_repo(path):
         _print_err(f"不是 Git 仓库: {path}")
         return 1
-    files = git_ops.list_changed_files(path)
-    hits = find_sensitive_files(files)
+    # 与 workflow.collect_sensitive_files 对齐（含 staged）
+    hits = collect_sensitive_files(path, None)
     if not hits:
         _print_ok("未发现疑似敏感文件")
         return 0
@@ -252,10 +254,53 @@ def cmd_check_sensitive(args: argparse.Namespace) -> int:
     return 1
 
 
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """凭据环境只读诊断（不修改配置、不存密）。"""
+    from core.auth_guide import (
+        diagnose_auth,
+        format_auth_help,
+        format_diagnosis,
+    )
+
+    path = _resolve_path(args.path)
+    remote_url = (getattr(args, "url", None) or "").strip()
+    if not remote_url and path.exists() and git_ops.is_repo(path):
+        remote = git_ops.remote_get(path, name="origin")
+        if remote.ok and remote.stdout:
+            remote_url = remote.stdout
+
+    run_ssh = not bool(getattr(args, "no_ssh", False))
+    diag = diagnose_auth(remote_url=remote_url, run_ssh_test=run_ssh)
+    _print_ok(format_diagnosis(diag))
+
+    if bool(getattr(args, "help_auth", False)):
+        _print_ok("")
+        _print_ok(
+            format_auth_help(
+                protocol="auto",
+                remote_url=remote_url,
+            )
+        )
+    else:
+        _print_ok("")
+        _print_ok("提示：加 --help-auth 可输出完整凭据配置说明。")
+
+    # 有失败项时退出码 1，便于脚本判断；纯信息场景仍可查看 stdout
+    if any(not item.ok for item in diag.items):
+        return 1
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="git-ship",
         description="Git Ship — 简洁的 Git 提交/推送小工具（CLI）",
+    )
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -372,6 +417,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_sens = sub.add_parser("check-sensitive", help="检查变更中的敏感文件")
     p_sens.add_argument("--path", default=".", help="仓库路径，默认当前目录")
     p_sens.set_defaults(func=cmd_check_sensitive)
+
+    p_doctor = sub.add_parser(
+        "doctor",
+        help="诊断 Git 凭据环境（只读，不修改配置）",
+    )
+    p_doctor.add_argument("--path", default=".", help="仓库路径，默认当前目录")
+    p_doctor.add_argument(
+        "--url",
+        default="",
+        help="可选：指定远程 URL（默认读取 origin）",
+    )
+    p_doctor.add_argument(
+        "--no-ssh",
+        action="store_true",
+        help="跳过 ssh -T 探测",
+    )
+    p_doctor.add_argument(
+        "--help-auth",
+        action="store_true",
+        help="额外输出凭据配置说明",
+    )
+    p_doctor.set_defaults(func=cmd_doctor)
 
     return parser
 

@@ -307,7 +307,11 @@ def bootstrap(
             branch=current or None,
         )
         if not push_result.ok:
-            enriched = git_ops.enrich_remote_error(push_result)
+            origin_url = git_ops.remote_get(target, name="origin")
+            enriched = git_ops.enrich_remote_error(
+                push_result,
+                remote_url=origin_url.stdout if origin_url.ok else remote,
+            )
             return _fail(
                 f"推送失败: {push_result.message}",
                 steps,
@@ -462,7 +466,10 @@ def ship(
         branch=current or None if need_upstream else None,
     )
     if not push_result.ok:
-        enriched = git_ops.enrich_remote_error(push_result)
+        enriched = git_ops.enrich_remote_error(
+            push_result,
+            remote_url=remote.stdout if remote.ok else "",
+        )
         return _fail(
             f"推送失败: {push_result.message}",
             steps,
@@ -582,7 +589,11 @@ def pull_workflow(
 
     result = git_ops.pull(target, remote=remote_name, branch=branch_name, rebase=rebase)
     if not result.ok:
-        enriched = git_ops.enrich_remote_error(result)
+        origin = git_ops.remote_get(target, name=remote_name)
+        enriched = git_ops.enrich_remote_error(
+            result,
+            remote_url=origin.stdout if origin.ok else "",
+        )
         return _fail(
             f"拉取失败: {result.message}",
             steps,

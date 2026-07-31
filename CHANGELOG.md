@@ -7,6 +7,23 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-31
+
+### 新增
+
+- `core.git_ops.enrich_remote_error`：push/pull 认证失败时附加凭据配置引导
+- CLI `doctor`：只读诊断 Git / credential.helper / SSH；可选 `--help-auth`
+- GUI「配置凭据」：展示配置说明并支持运行诊断
+- 环境变量 `GIT_SHIP_TIMEOUT` / `GIT_SHIP_REMOTE_TIMEOUT` 覆盖默认超时（≤0 不限制）
+- CLI `--version` / `-V`；版本单一来源 `core/__version__.py`
+
+### 变更
+
+- CLI `check-sensitive` 与 `workflow.collect_sensitive_files` 对齐（含 staged）
+- `pyproject.toml`：`requires-python >=3.10`、dynamic version、修正 project.urls、排除 tests
+- README 超时说明与 badge 对齐（本地 120s / 远程 300s，版本 0.3.0）
+- PyInstaller 增加 `core.auth_guide`、`core.__version__` hidden-import
+
 ## [0.2.1] - 2026-07-23
 
 ### 新增
@@ -62,7 +79,9 @@
 
 ---
 
-[Unreleased]: https://github.com/moon-stack-OAo/git-ship/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/moon-stack-OAo/git-ship/compare/v0.3.0...HEAD
+
+[0.3.0]: https://github.com/moon-stack-OAo/git-ship/compare/v0.2.1...v0.3.0
 
 [0.2.1]: https://github.com/moon-stack-OAo/git-ship/compare/v0.2.0...v0.2.1
 

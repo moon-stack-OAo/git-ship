@@ -13,6 +13,7 @@ from typing import Optional, Sequence, Union
 PathLike = Union[str, Path]
 
 # 默认超时（秒）：本地命令 120s；网络相关 push/pull 等 300s
+# 可通过 GIT_SHIP_TIMEOUT / GIT_SHIP_REMOTE_TIMEOUT 覆盖（秒，≤0 表示不限制）
 DEFAULT_TIMEOUT = 120.0
 NETWORK_TIMEOUT = 300.0
 _NETWORK_COMMANDS = frozenset({"push", "pull", "fetch", "clone", "ls-remote"})
@@ -38,13 +39,58 @@ def _as_path(path: PathLike) -> Path:
     return Path(path).expanduser().resolve()
 
 
-def _resolve_timeout(args: Sequence[str], timeout: Optional[float]) -> float:
-    """根据子命令选择默认超时；显式传入 timeout 时优先使用。"""
+def _parse_timeout_env(name: str, default: float) -> Optional[float]:
+    """读取超时环境变量；空则用 default，≤0 表示不限制（返回 None）。"""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    if value <= 0:
+        return None
+    return value
+
+
+def _resolve_timeout(
+    args: Sequence[str], timeout: Optional[float]
+) -> Optional[float]:
+    """
+    根据子命令选择默认超时；显式传入 timeout 时优先使用。
+    返回 None 表示不限制（subprocess timeout=None）。
+    """
     if timeout is not None:
-        return timeout
+        return timeout if timeout > 0 else None
     if args and args[0] in _NETWORK_COMMANDS:
-        return NETWORK_TIMEOUT
-    return DEFAULT_TIMEOUT
+        return _parse_timeout_env("GIT_SHIP_REMOTE_TIMEOUT", NETWORK_TIMEOUT)
+    return _parse_timeout_env("GIT_SHIP_TIMEOUT", DEFAULT_TIMEOUT)
+
+
+def enrich_remote_error(
+    result: GitResult,
+    *,
+    remote_url: str = "",
+) -> str:
+    """
+    增强远程操作（push/pull 等）失败信息。
+    若像认证失败，则附加 auth_guide 配置引导；否则返回原始 message。
+    延迟 import auth_guide，避免循环依赖。
+    """
+    raw = (result.message if result is not None else "") or ""
+    raw = raw.strip()
+    if not raw:
+        return ""
+    # 延迟 import：auth_guide 依赖 remote，不应在模块顶层拉入
+    from core.auth_guide import format_auth_failure_guide, is_auth_error
+
+    if is_auth_error(raw):
+        return format_auth_failure_guide(
+            raw,
+            remote_url=remote_url or "",
+            include_diagnosis=True,
+        )
+    return raw
 
 
 def _run(
@@ -55,7 +101,7 @@ def _run(
     env: Optional[dict] = None,
     timeout: Optional[float] = None,
 ) -> GitResult:
-    """执行 git 子命令。timeout=None 时按命令类型使用默认超时策略。"""
+    """执行 git 子命令。timeout=None 且未显式传入时按命令类型使用默认超时策略。"""
     command = ["git", *args]
     run_env = os.environ.copy()
     # 避免交互式编辑器/分页器阻塞
@@ -86,13 +132,19 @@ def _run(
             command=list(command),
         )
     except subprocess.TimeoutExpired:
+        limit = (
+            f"{effective_timeout:g} 秒"
+            if effective_timeout is not None
+            else "未限制"
+        )
         return GitResult(
             ok=False,
             code=124,
             stdout="",
             stderr=(
-                f"git 命令超时（{effective_timeout:g} 秒）: {' '.join(command)}。"
-                "网络操作可检查连通性或稍后重试。"
+                f"git 命令超时（{limit}）: {' '.join(command)}。"
+                "网络操作可检查连通性或稍后重试；"
+                "也可设置 GIT_SHIP_TIMEOUT / GIT_SHIP_REMOTE_TIMEOUT。"
             ),
             command=list(command),
         )

@@ -123,6 +123,8 @@ jobs:
             --hidden-import=core.workflow \
             --hidden-import=core.config \
             --hidden-import=core.sensitive \
+            --hidden-import=core.auth_guide \
+            --hidden-import=core.__version__ \
             --hidden-import=ui \
             --hidden-import=ui.main_window \
             --hidden-import=ui.widgets \
@@ -146,6 +148,8 @@ jobs:
             --hidden-import=core.workflow \
             --hidden-import=core.config \
             --hidden-import=core.sensitive \
+            --hidden-import=core.auth_guide \
+            --hidden-import=core.__version__ \
             --hidden-import=cli \
             --hidden-import=cli.app \
             git_ship_cli.py

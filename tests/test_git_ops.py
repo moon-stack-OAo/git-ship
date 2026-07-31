@@ -314,6 +314,72 @@ class TestGitOpsMock(unittest.TestCase):
             names = git_ops.list_branch_names("/tmp/repo", remote=False)
         self.assertEqual(names, ["main", "HEAD", "feature/x", "origin"])
 
+    def test_enrich_remote_error_auth_failure(self):
+        result = git_ops.GitResult(
+            ok=False,
+            code=128,
+            stdout="",
+            stderr="fatal: Authentication failed for 'https://github.com/a/b.git'",
+            command=["git", "push"],
+        )
+        with mock.patch(
+            "core.auth_guide.format_auth_failure_guide",
+            return_value="ENHANCED_AUTH_GUIDE",
+        ) as guide_mock:
+            with mock.patch("core.auth_guide.is_auth_error", return_value=True):
+                text = git_ops.enrich_remote_error(
+                    result,
+                    remote_url="https://github.com/a/b.git",
+                )
+        self.assertEqual(text, "ENHANCED_AUTH_GUIDE")
+        guide_mock.assert_called_once()
+        self.assertIn("Authentication failed", guide_mock.call_args[0][0])
+
+    def test_enrich_remote_error_non_auth(self):
+        result = git_ops.GitResult(
+            ok=False,
+            code=1,
+            stdout="",
+            stderr="fatal: remote end hung up unexpectedly",
+            command=["git", "push"],
+        )
+        with mock.patch("core.auth_guide.is_auth_error", return_value=False):
+            text = git_ops.enrich_remote_error(result)
+        self.assertEqual(text, "fatal: remote end hung up unexpectedly")
+
+    def test_timeout_env_local(self):
+        with mock.patch.dict(
+            os.environ,
+            {"GIT_SHIP_TIMEOUT": "33", "GIT_SHIP_REMOTE_TIMEOUT": "66"},
+            clear=False,
+        ):
+            with mock.patch("core.git_ops.subprocess.run") as run_mock:
+                run_mock.return_value = mock.Mock(returncode=0, stdout="", stderr="")
+                git_ops.status_porcelain("/tmp/repo")
+                self.assertEqual(run_mock.call_args.kwargs.get("timeout"), 33.0)
+
+    def test_timeout_env_remote(self):
+        with mock.patch.dict(
+            os.environ,
+            {"GIT_SHIP_TIMEOUT": "33", "GIT_SHIP_REMOTE_TIMEOUT": "66"},
+            clear=False,
+        ):
+            with mock.patch("core.git_ops.subprocess.run") as run_mock:
+                run_mock.return_value = mock.Mock(returncode=0, stdout="", stderr="")
+                git_ops.push("/tmp/repo")
+                self.assertEqual(run_mock.call_args.kwargs.get("timeout"), 66.0)
+
+    def test_timeout_env_unlimited(self):
+        with mock.patch.dict(
+            os.environ,
+            {"GIT_SHIP_REMOTE_TIMEOUT": "0"},
+            clear=False,
+        ):
+            with mock.patch("core.git_ops.subprocess.run") as run_mock:
+                run_mock.return_value = mock.Mock(returncode=0, stdout="", stderr="")
+                git_ops.pull("/tmp/repo")
+                self.assertIsNone(run_mock.call_args.kwargs.get("timeout"))
+
 
 if __name__ == "__main__":
     unittest.main()

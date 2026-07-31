@@ -1,0 +1,86 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "git-ship"
+description = "简洁的 Git 代码提交小工具：CLI + GUI，核心逻辑共用。支持 Windows / macOS。"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Git Ship Team"}
+]
+keywords = ["git", "cli", "gui", "tkinter", "git-ship"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+]
+dynamic = ["version"]
+
+[project.scripts]
+git-ship = "git_ship:main"
+git-ship-cli = "cli.app:main"
+
+[project.urls]
+"Homepage" = "https://github.com/moon-stack-OAo/git-ship"
+"Bug Reports" = "https://github.com/moon-stack-OAo/git-ship/issues"
+"Source" = "https://github.com/moon-stack-OAo/git-ship"
+"Changelog" = "https://github.com/moon-stack-OAo/git-ship/blob/main/CHANGELOG.md"
+
+[tool.setuptools.dynamic]
+version = {attr = "core.__version__.__version__"}
+
+[tool.setuptools]
+py-modules = ["git_ship", "git_ship_cli"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "cli*", "ui*"]
+exclude = ["tests*", "tests.*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+lint.select = ["E4", "E7", "E9", "F", "I", "B", "C4", "W", "UP"]
+lint.ignore = ["E501", "E402", "B904"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-length = 88
+
+[tool.black]
+line-length = 88
+target-version = ['py310', 'py311', 'py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | env
+)/
+'''
+
+[tool.pytest.ini_options]
+addopts = "-ra -q"
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["core", "cli", "ui"]
+omit = ["tests/*"]

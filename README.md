@@ -1,10 +1,10 @@
 # Git Ship
 
-![Python](https://img.shields.io/badge/python-3.11-blue.svg)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
-![Windows](https://img.shields.io/badge/Windows%20(v0.2.1)-0078D6?logo=windows&logoColor=white)
-![macOS](https://img.shields.io/badge/macOS%20(v0.2.1)-000000?logo=apple&logoColor=white)
-![Version](https://img.shields.io/badge/version-0.2.1-brightgreen.svg)
+![Windows](https://img.shields.io/badge/Windows%20(v0.3.0)-0078D6?logo=windows&logoColor=white)
+![macOS](https://img.shields.io/badge/macOS%20(v0.3.0)-000000?logo=apple&logoColor=white)
+![Version](https://img.shields.io/badge/version-0.3.0-brightgreen.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 简洁的 Git 代码提交小工具：CLI + GUI，核心逻辑共用。支持 Windows / macOS。
@@ -74,6 +74,11 @@ python git_ship_cli.py pull --path . --dry-run
 # 敏感文件检查
 python git_ship_cli.py check-sensitive --path .
 
+# 凭据环境诊断（只读）
+python git_ship_cli.py doctor --path .
+python git_ship_cli.py doctor --path . --help-auth
+python git_ship_cli.py --version
+
 # 一键初始化并推送
 python git_ship_cli.py bootstrap --remote https://github.com/owner/repo.git -m "初始提交" --path .
 
@@ -120,10 +125,12 @@ git-ship/
 ├── requirements.txt
 ├── README.md
 ├── core/                # 纯逻辑，无 UI
+│   ├── __version__.py
 │   ├── git_ops.py
 │   ├── remote.py
 │   ├── workflow.py
 │   ├── sensitive.py
+│   ├── auth_guide.py
 │   └── config.py
 ├── ui/
 │   ├── main_window.py
@@ -141,9 +148,9 @@ git-ship/
 
 ## 注意事项
 
-1. **凭据**：不保存账号密码；HTTPS 推送依赖系统 Git Credential Manager / 凭据助手；SSH 依赖本机密钥与 agent。工具设置 `GIT_TERMINAL_PROMPT=0`，**不会**交互式询问密码；认证失败时会给出配置提示。
+1. **凭据**：不保存账号密码；HTTPS 推送依赖系统 Git Credential Manager / 凭据助手；SSH 依赖本机密钥与 agent。工具设置 `GIT_TERMINAL_PROMPT=0`，**不会**交互式询问密码；认证失败时会给出配置提示。CLI：`doctor`；GUI：操作区「配置凭据」。
 2. **协议**：默认与模板均为 HTTPS；支持粘贴 `git@host:owner/repo[.git]` 与 `ssh://git@host/owner/repo[.git]`。
-3. **超时**：本地 git 默认 60s，`push`/`pull` 默认 300s；可用环境变量 `GIT_SHIP_TIMEOUT` / `GIT_SHIP_REMOTE_TIMEOUT` 调整（秒，≤0 表示不限制）。
+3. **超时**：本地 git 默认 120s，`push`/`pull`/`fetch` 等网络命令默认 300s；可用环境变量 `GIT_SHIP_TIMEOUT` / `GIT_SHIP_REMOTE_TIMEOUT` 调整（秒，≤0 表示不限制）。
 4. **不支持 force push**：无强制推送能力，避免误覆盖远程历史。`--force` 仅用于忽略敏感文件提醒。
 5. **提交规范**：不强制 Conventional Commits，message 仅需非空。
 6. **远程平台**：GitHub / GitLab / Gitee 为常用模板；其他主机选「自定义」并填写完整 URL。
