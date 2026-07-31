@@ -23,6 +23,7 @@
 - `pyproject.toml`：`requires-python >=3.10`、dynamic version、修正 project.urls、排除 tests
 - README 超时说明与 badge 对齐（本地 120s / 远程 300s，版本 0.3.0）
 - PyInstaller 增加 `core.auth_guide`、`core.__version__` hidden-import
+- 裸跑 CLI（无子命令）打印帮助，不再报 `command required`
 
 ## [0.2.1] - 2026-07-23
 

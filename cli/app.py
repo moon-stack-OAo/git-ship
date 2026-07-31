@@ -302,7 +302,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="version",
         version=f"%(prog)s {__version__}",
     )
-    sub = parser.add_subparsers(dest="command", required=True)
+    # required=False：裸跑 git-ship 时打印帮助，而不是报 “command required”
+    sub = parser.add_subparsers(dest="command", required=False)
 
     p_status = sub.add_parser("status", help="查看仓库状态")
     p_status.add_argument("--path", default=".", help="仓库路径，默认当前目录")
